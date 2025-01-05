@@ -1,4 +1,3 @@
-import requests
 import json
 import math
 import socket
@@ -93,11 +92,8 @@ def calculate_relative_distances(lat1, lon1, lat2, lon2):
 
     return relative_east, relative_north
 
-
 def calculate_relative_vertical_distance(altitude1, altitude2):
     return altitude2 - altitude1
-
-
 
 def feet_to_meters(feet):
     meters = float(feet) * 0.3048
@@ -110,13 +106,13 @@ def string_to_number(input_string):
     except ValueError:
         print("Invalid input: not a valid integer")
         return None
-    
+
 def knots_to_mps(knots):
     # 1 knot is equal to 0.514444 meters per second
     meters_per_second = float(knots) * 0.514444
     
-    # Round the distances to whole numbers
-    meters_per_second = round(meters_per_second,1)
+    # Round the distances to one decimal place
+    meters_per_second = round(meters_per_second, 1)
     
     return meters_per_second
 
@@ -141,19 +137,17 @@ def calculate_nmea_checksum(sentence):
 
     return checksum_hex
 
-
-def calculate_nmea_sentance(sentance):
-    #Calculate checksum
-    chk = calculate_nmea_checksum(sentance)
+def calculate_nmea_sentence(sentence):
+    # Calculate checksum
+    chk = calculate_nmea_checksum(sentence)
     
-    #Add checksum to sentance with newline
-    message = sentance + '*' + chk + '\n'
+    # Add checksum to sentence with newline
+    message = sentence + '*' + chk + '\n'
     
-    return(message)
-
+    return message
 
 def calculate_alert_radius(t_RelativeEast, t_RelativeNorth):
-    alert_radius = math.sqrt(abs(t_RelativeEast)**2 + abs(t_RelativeNorth)**2)
+    alert_radius = math.sqrt(t_RelativeEast**2 + t_RelativeNorth**2)
     return alert_radius
 
 def calculate_t_AlarmLevel(t_RelativeVertical, t_RelativeEast, t_RelativeNorth):
@@ -165,209 +159,187 @@ def calculate_t_AlarmLevel(t_RelativeVertical, t_RelativeEast, t_RelativeNorth):
         return 1
     else:
         return 0
-    
 
-def parse_json_from_url(url):
-    retries = 0
+def parse_json_from_file(file_path):
     retry_delay = 15
     try:
-        # Make an HTTP GET request to the URL
-        #time.sleep(.2)
-        response = requests.get(url)
-        #print(response)
-
-        # Check if the request was successful (status code 200)
-        if response.status_code == 200:
-            # Clean the JSON response by removing "[General]" at the end
-            json_string = response.text.strip()
-            if json_string.endswith("[General]"):
-                json_string = json_string[:-9]  # Remove the last 9 characters
-
-            # Split the JSON objects and wrap them with commas to make it valid JSON
-            json_string = "[" + json_string.replace("}{", "},{") + "]"
-
-            # Parse the cleaned JSON response
-            parsed_data = json.loads(json_string)
-
-            # Print the parsed JSON object
-            #print("Parsed JSON:")
-            #print(json.dumps(parsed_data, indent=4))
+        with open(file_path, 'r') as file:
+            json_string = file.read().strip()
+        
+        # Parse the JSON data
+        parsed_data = json.loads(json_string)
+        
+        # Verify that the data is a list
+        if isinstance(parsed_data, list):
             return parsed_data
         else:
-            print(f"HTTP GET request failed with status code: {response.status_code}")
+            print("JSON data is not a list as expected.")
             return None
 
-    except requests.exceptions.ConnectionError as e:
-            #print(f"Error connecting to the server: {str(e)}")
-            retries += 1
-            print('Is condor spectator running? Attempted to connect.')
-            print(f"Retrying in {retry_delay} seconds...")
-            time.sleep(retry_delay)
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        time.sleep(retry_delay)
+        return None
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {str(e)}")
+        time.sleep(retry_delay)
+        return None
+    except Exception as e:
+        print(f"Error reading file: {str(e)}")
+        time.sleep(retry_delay)
+        return None
 
-
-# Function to run parse_json_from_url in a separate thread
+# Function to run parse_json_from_file in a separate thread (if needed in future)
 def run_parse_json():
     global parsed_data  # Access the global variable parsed_data
     while True:
-        parsed_object = parse_json_from_url(url)
+        parsed_object = parse_json_from_file(file_path)
 
 # Create a lock for thread-safe access to parsed_data
-#lock = threading.Lock()
-#parsed_data = None
+# lock = threading.Lock()
+# parsed_data = None
 
-# URL of the JSON endpoint
-url = "http://127.0.0.1:8081/allPilots"
-
-
+# Path to the JSON file
+file_path = r"C:\Condor3\Logs\spectate.json"
 
 # Define the target IP address and port
-target_ip = '192.168.0.190'  # Replace with the IP address you want to send to
+target_ip = '192.168.0.191'  # Replace with the IP address you want to send to
 target_port = 4352  # Replace with the port number you want to use
 
+# URL of the JSON endpoint is no longer needed
+# url = "http://127.0.0.1:8080/allPilots"
 
-
-#json_thread = threading.Thread(target=run_parse_json)
-#json_thread.start()
-#print("Waiting for data to be parsed from",url)
-
+# Removed threading as the main loop handles reading the file
 
 Target_CN = "DC1"
 Target_CN_hex = convert_to_hex(Target_CN)
-print('Target CN:',Target_CN,'in hex:',Target_CN_hex)
+print('Target CN:', Target_CN, 'in hex:', Target_CN_hex)
 
-#Loop target time for all UDP traffic as to not overwhelm XCSOAR
-target_time = 1.0
-
+# Loop target time for all UDP traffic as to not overwhelm XCSOAR
+target_time = 1.0  # seconds
 
 # Create a UDP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-
-print('Grabbing data from:',url)
-print('Sending data to:',target_ip,'port:',target_port)
+print('Grabbing data from:', file_path)
+print('Sending data to:', target_ip, 'port:', target_port)
 
 while True:
-
-    #run_parse_json()
-    #dynamic loop time
+    # Dynamic loop time
     start_time = time.time()
     
-    # Call the parse_json_from_url function
-    parsed_object = parse_json_from_url(url)
-    #print(parsed_object)
-    #print(parsed_object)
+    # Call the parse_json_from_file function
+    parsed_object = parse_json_from_file(file_path)
+    
+    if parsed_object is None:
+        # If parsing failed, skip this iteration and retry
+        print('Failed to parse JSON data. Retrying...')
+        time.sleep(1)
+        continue
+
     try:
         index = next((i for i, entry in enumerate(parsed_object) if entry.get('CN') == Target_CN), None)
-        #print(index)
-        #define ownship
+        if index is None:
+            print(f"Cannot find ownship with CN='{Target_CN}'. Waiting 10 seconds...")
+            time.sleep(10)
+            continue
 
-        #calculate number of ships
-        numships = len(parsed_object)
-        #print(numships)
-        
-        #identify ownship
+        # Define ownship
         ownship = parsed_object[index]
         ownship_lat = dmm_mmm_direction_to_dd_ddddd(ownship['latitude'])
         ownship_lon = dmm_mmm_direction_to_dd_ddddd(ownship['longitude'])
-        #ownship_alt = feet_to_meters(ownship['altitude'])
-        ownship_alt = ownship['altitude']
+        # ownship_alt = feet_to_meters(ownship['altitude'])
+        ownship_alt = float(ownship['altitude'])
 
-
-        #iterate through list, skip ownship (if no skip then ownship object present (OK))
-
+        # Calculate number of ships
+        numships = len(parsed_object)
+        # print(numships)
+        
+        # Iterate through list, skip ownship (if no skip then ownship object present (OK))
         for i in range(numships):
-            #print(i)
+            # Convert condor format to PFLAA format
+            testship = parsed_object[i]  # testing
 
-             #convert condor format to PFLAA format
-            testship = parsed_object[i] ###testing
-
-            #relative north   #relative east
+            # Relative north, relative east
             a_lat = dmm_mmm_direction_to_dd_ddddd(testship['latitude'])
             a_lon = dmm_mmm_direction_to_dd_ddddd(testship['longitude'])
 
-            t_RelativeEast, t_RelativeNorth = calculate_relative_distances (ownship_lat,ownship_lon,a_lat,a_lon) #meters (ownship_lat,ownship_lon,a_lat,a_lon) #meters
+            t_RelativeEast, t_RelativeNorth = calculate_relative_distances(ownship_lat, ownship_lon, a_lat, a_lon)  # meters
 
-            #relative vertical
-            #a_alt = feet_to_meters(testship['altitude'])
-            a_alt = testship['altitude']
-            #print('alt:',a_alt)
+            # Relative vertical
+            # a_alt = feet_to_meters(testship['altitude'])
+            a_alt = float(testship['altitude'])
+            # print('alt:',a_alt)
             
-            t_RelativeVertical = round(float(a_alt) - float(ownship_alt)) #meters
+            t_RelativeVertical = round(a_alt - ownship_alt)  # meters
            
-            #alarm level = 0
-            #t_AlarmLevel = 0
+            # Alarm level
             t_AlarmLevel = calculate_t_AlarmLevel(t_RelativeVertical, t_RelativeEast, t_RelativeNorth)
 
-            '''if t_RelativeVertical < abs(50) and (t_RelativeEast < abs(100) or t_RelativeNorth < abs(100)):
-                t_AlarmLevel = 2
-                #print(t_RelativeVertical,t_RelativeEast,t_RelativeNorth)
-            elif t_RelativeVertical < abs(100) and (t_RelativeEast < abs(300) or t_RelativeNorth < abs(300)):
-                t_AlarmLevel = 1
-            else:
-                t_AlarmLevel = 0'''
-            
-            
-            #id type = 1
+            # ID type = 1
             t_IDType = 1
 
-            #ID (hexidecimal of CN)
+            # ID (hexadecimal of CN)
             t_ID = convert_to_hex(testship['CN'])
 
-            #track
+            # Track
             t_Track = string_to_number(testship['heading'])
+            if t_Track is None:
+                t_Track = 0  # Default value if conversion fails
 
-            #turnrate = 0
+            # Turn rate = 0
             t_TurnRate = ''
 
-            #groundspeed
-            #t_GroundSpeed = knots_to_mps(testship['speed']) #m/s
+            # Groundspeed
+            # t_GroundSpeed = knots_to_mps(testship['speed'])  # m/s
             t_GroundSpeed = testship['speed']
 
-            #climbrate
-            #t_ClimbRate = knots_to_mps(testship['vario']) #m/s
+            # Climb rate
+            # t_ClimbRate = knots_to_mps(testship['vario'])  # m/s
             t_ClimbRate = testship['vario']
-            #print('id:',t_ID,'climb (kts):',testship['vario'],'(mps)',t_ClimbRate,'rel vert',t_RelativeVertical)
+            # print('id:',t_ID,'climb (kts):',testship['vario'],'(mps)',t_ClimbRate,'rel vert',t_RelativeVertical)
 
-            #type = 1
+            # Type = 1
             t_Type = 1
             
-            #print(t_AlarmLevel,t_RelativeVertical,t_RelativeEast,t_RelativeNorth)
-
+            # print(t_AlarmLevel,t_RelativeVertical,t_RelativeEast,t_RelativeNorth)
             
-            
-            #send ship via udp
+            # Send ship via UDP
             try:
                 # Message to send
-                #message = "$PFLAA,0,-1234,1234,220,2,DD8F12,180,-4.5,30,-1.4,1*\n"
+                # message = "$PFLAA,0,-1234,1234,220,2,DD8F12,180,-4.5,30,-1.4,1*\n"
                 if t_RelativeNorth != 0 and t_RelativeEast != 0:
                     
-                    message = "$PFLAA,"+str(t_AlarmLevel)+","+str(t_RelativeNorth)+","+str(t_RelativeEast)+","+str(t_RelativeVertical)+","+str(t_IDType)+","+str(t_ID)+","+str(t_Track)+","+str(t_TurnRate)+","+str(t_GroundSpeed)+","+str(t_ClimbRate)+","+str(t_Type)
-                    #message = "$PFLAA,"+str(t_AlarmLevel)+","+str(-1000)+","+str(1000)+","+str(15)+","+str(t_IDType)+","+str("ABC123")+","+str(t_Track)+","+str(5)+","+str(200)+","+str(15)+","+str(1)
+                    message = "$PFLAA," + str(t_AlarmLevel) + "," + str(t_RelativeNorth) + "," + str(t_RelativeEast) + "," + str(t_RelativeVertical) + "," + str(t_IDType) + "," + str(t_ID) + "," + str(t_Track) + "," + str(t_TurnRate) + "," + str(t_GroundSpeed) + "," + str(t_ClimbRate) + "," + str(t_Type)
+                    # message = "$PFLAA,"+str(t_AlarmLevel)+","+str(-1000)+","+str(1000)+","+str(15)+","+str(t_IDType)+","+str("ABC123")+","+str(t_Track)+","+str(5)+","+str(200)+","+str(15)+","+str(1)
 
-                    msg = calculate_nmea_sentance(message)
-                    #print(msg)
+                    msg = calculate_nmea_sentence(message)
+                    # print(msg)
                     # Send the message to the target IP and port
                     sock.sendto(msg.encode('utf-8'), (target_ip, target_port))
                 else:
-                    #print('not sending',t_ID)
+                    # print('not sending',t_ID)
                     pass
-                #print(f"Sent '{message}' to {target_ip}:{target_port}")
-                #if i==0:
-                    #print(t_RelativeNorth, t_RelativeEast)
+                # print(f"Sent '{message}' to {target_ip}:{target_port}")
+                # if i==0:
+                    # print(t_RelativeNorth, t_RelativeEast)
 
             finally:
-                time.sleep(.001)
+                time.sleep(0.00001)
 
-        #dynamic loop timing        
+        # Dynamic loop timing        
         end_time = time.time()
         elapsed_time = end_time - start_time
+        print("elapsed_time", elapsed_time)
         time_difference = target_time - elapsed_time
-        #print(time_difference)
+        print("time_difference", time_difference)
+        # print(time_difference)
         if time_difference > 0:
             # Sleep for the remaining time to reach the target
             time.sleep(time_difference)
     except Exception as e:
-        #print(e)
-        print('cannot find',Target_CN,'waiting 10 seconds...')
+        print(e)
+        print('Cannot find', Target_CN, 'waiting 10 seconds...')
         time.sleep(10)
         pass
+
