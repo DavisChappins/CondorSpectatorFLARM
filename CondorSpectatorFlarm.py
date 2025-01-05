@@ -203,7 +203,7 @@ def run_parse_json():
 file_path = r"C:\Condor3\Logs\spectate.json"
 
 # Define the target IP address and port
-target_ip = '192.168.0.191'  # Replace with the IP address you want to send to
+target_ip = '127.0.0.1'  # Replace with the IP address you want to send to
 target_port = 4352  # Replace with the port number you want to use
 
 # URL of the JSON endpoint is no longer needed
